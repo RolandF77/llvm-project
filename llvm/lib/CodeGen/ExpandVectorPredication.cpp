@@ -491,6 +491,8 @@ Value *CachingVPExpander::expandPredicationInComparison(IRBuilder<> &Builder,
 }
 
 bool CachingVPExpander::discardEVLParameter(VPIntrinsic &VPI) {
+// RF debug
+dbgs() << "&&& Discard\n";
   LLVM_DEBUG(dbgs() << "Discard EVL parameter in " << VPI << "\n");
 
   if (VPI.canIgnoreVectorLengthParam())
@@ -646,6 +648,10 @@ void sanitizeStrategy(VPIntrinsic &VPI, VPLegalization &LegalizeStrat) {
 VPLegalization
 CachingVPExpander::getVPLegalizationStrategy(const VPIntrinsic &VPI) const {
   auto VPStrat = TTI.getVPLegalizationStrategy(VPI);
+  // RF debug
+  VPStrat.EVLParamStrategy = VPLegalization::Legal;
+  VPStrat.OpStrategy = VPLegalization::Legal;
+
   if (LLVM_LIKELY(!UsingTTIOverrides)) {
     // No overrides - we are in production.
     return VPStrat;

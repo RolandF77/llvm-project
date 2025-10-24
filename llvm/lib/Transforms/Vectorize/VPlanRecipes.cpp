@@ -658,7 +658,8 @@ Value *VPInstruction::generate(VPTransformState &State) {
     assert(AVL->getType()->isIntegerTy() &&
            "Requested vector length should be an integer.");
 
-    assert(State.VF.isScalable() && "Expected scalable vector factor.");
+    // RF debug
+    // assert(State.VF.isScalable() && "Expected scalable vector factor.");
     Value *VFArg = State.Builder.getInt32(State.VF.getKnownMinValue());
 
     Value *EVL = State.Builder.CreateIntrinsic(
@@ -3178,6 +3179,7 @@ static Instruction *createReverseEVL(IRBuilderBase &Builder, Value *Operand,
                                  {Operand, AllTrueMask, EVL}, nullptr, Name);
 }
 
+// RF debug
 void VPWidenLoadEVLRecipe::execute(VPTransformState &State) {
   Type *ScalarDataTy = getLoadStoreType(&Ingredient);
   auto *DataTy = VectorType::get(ScalarDataTy, State.VF);

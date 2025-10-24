@@ -664,6 +664,16 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v2f64, Custom);
 
   // To handle counter-based loop conditions.
+// RF debug
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v16i8, Custom);
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v8i16, Custom);
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v4i32, Custom);
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v2i64, Custom);
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+  // setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v16i1, Custom);
+  setOperationAction(ISD::VP_STORE, MVT::v16i1, Custom);
+  setOperationAction(ISD::VP_LOAD, MVT::v16i1, Custom);
+  setOperationAction(ISD::VP_LOAD, MVT::v16i8, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i1, Custom);
 
   setOperationAction(ISD::INTRINSIC_VOID, MVT::i8, Custom);
@@ -11167,6 +11177,11 @@ SDValue PPCTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   SDLoc dl(Op);
 
   switch (IntrinsicID) {
+  // RF debug
+  case Intrinsic::experimental_get_vector_length:
+    dbgs() << "&&& Get vector length!!!\n";
+    return SDValue();
+
   case Intrinsic::thread_pointer:
     // Reads the thread pointer register, used for __builtin_thread_pointer.
     if (Subtarget.isPPC64())
@@ -12710,7 +12725,60 @@ SDValue PPCTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::ROTL:               return LowerROTL(Op, DAG);
 
   // For counter-based loop handling.
-  case ISD::INTRINSIC_W_CHAIN:  return SDValue();
+// RF debug
+  case ISD::VP_STORE: {
+/*
+    Info.opc = ISD::INTRINSIC_VOID;
+    Info.memVT = VT;
+    Info.ptrVal = I.getArgOperand(1);
+    Info.offset = -VT.getStoreSize()+1;
+    Info.size = 2*VT.getStoreSize()-1;
+    Info.align = Align(1);
+    Info.flags = MachineMemOperand::MOStore;
+*/
+    dbgs() << "&&& Lower VP_STORE\n";
+    Op.dump();
+    if (auto VPST = dyn_cast<VPStoreSDNode>(Op)) {
+      EVT PtrVT = getPointerTy(DAG.getDataLayout());
+      SDLoc dl(Op);
+      SDValue Ops[] = {
+        VPST->getChain(),    // Chain
+        // DAG.getConstant(Intrinsic::ppc_vsx_stxvl, dl, MVT::i32),
+        DAG.getTargetConstant(Intrinsic::ppc_vsx_stxvl, dl, MVT::i64),
+        DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, VPST->getOperand(1)),
+        VPST->getOperand(2),
+        DAG.getNode(ISD::ZERO_EXTEND, dl, PtrVT, VPST->getOperand(5)),
+      };
+      SDVTList Tys = DAG.getVTList(MVT::Other);
+      // SDValue VPS = DAG.getMemIntrinsicNode(ISD::INTRINSIC_W_CHAIN, dl, Tys,
+      SDValue VPS = DAG.getMemIntrinsicNode(ISD::INTRINSIC_VOID, dl, Tys,
+                                            Ops, VPST->getMemoryVT(), VPST->getMemOperand());
+      VPS.dump();
+      return VPS;
+    }
+    return SDValue();
+  }
+  case ISD::VP_LOAD:  {
+    dbgs() << "&&& Lower VP_LOAD\n";
+    Op.dump();
+    if (auto VPLD = dyn_cast<VPLoadSDNode>(Op)) {
+      EVT PtrVT = getPointerTy(DAG.getDataLayout());
+      SDLoc dl(Op);
+      SDValue Ops[] = {
+        VPLD->getChain(),    // Chain
+        DAG.getConstant(Intrinsic::ppc_vsx_lxvl, dl, MVT::i32),
+        VPLD->getOperand(1),
+        // VPLD->getOperand(4),
+        DAG.getNode(ISD::ZERO_EXTEND, dl, PtrVT, VPLD->getOperand(4)),
+      };
+      SDVTList Tys = DAG.getVTList(Op->getValueType(0), MVT::Other);
+      SDValue VPL = DAG.getMemIntrinsicNode(ISD::INTRINSIC_W_CHAIN, dl, Tys,
+                                            Ops, VPLD->getMemoryVT(), VPLD->getMemOperand());
+      VPL.dump();
+      return VPL;
+    }
+    return SDValue();
+  }
 
   case ISD::BITCAST:            return LowerBITCAST(Op, DAG);
 
@@ -12760,6 +12828,11 @@ void PPCTargetLowering::ReplaceNodeResults(SDNode *N,
     break;
   }
   case ISD::INTRINSIC_W_CHAIN: {
+    // RF debug
+    if (N->getConstantOperandVal(1) == Intrinsic::experimental_get_vector_length)  {
+      dbgs() << "&&& With get length!!!\n";
+    }
+
     if (N->getConstantOperandVal(1) != Intrinsic::loop_decrement)
       break;
 

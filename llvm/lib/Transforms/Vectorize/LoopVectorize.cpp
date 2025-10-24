@@ -1349,6 +1349,8 @@ public:
   /// \param IsScalableVF true if scalable vector factors enabled.
   /// \param UserIC User specific interleave count.
   void setTailFoldingStyles(bool IsScalableVF, unsigned UserIC) {
+// RF debug
+dbgs() << "&&& Func\n";
     assert(!ChosenTailFoldingStyle && "Tail folding must not be selected yet.");
     if (!Legal->canFoldTailByMasking()) {
       ChosenTailFoldingStyle = {TailFoldingStyle::None, TailFoldingStyle::None};
@@ -1366,12 +1368,23 @@ public:
     if (ChosenTailFoldingStyle->first != TailFoldingStyle::DataWithEVL &&
         ChosenTailFoldingStyle->second != TailFoldingStyle::DataWithEVL)
       return;
+// RF debug
+dbgs() << "&&& Above\n";
+
     // Override EVL styles if needed.
     // FIXME: Investigate opportunity for fixed vector factor.
     bool EVLIsLegal = UserIC <= 1 && IsScalableVF &&
                       TTI.hasActiveVectorLength() && !EnableVPlanNativePath;
-    if (EVLIsLegal)
-      return;
+// not scalable, no active length (this is just a TTI profitability check)
+dbgs() << "&&& UserIC " << UserIC << " IsScalableVF " << IsScalableVF << 
+" TTI.hasActiveVectorLength() " << TTI.hasActiveVectorLength() <<
+" EnableVPlanNativePath " << EnableVPlanNativePath << "\n";
+
+// RF debug
+    // if (EVLIsLegal)
+    if (1)
+       return;
+
     // If for some reason EVL mode is unsupported, fallback to a scalar epilogue
     // if it's allowed, or DataWithoutLaneMask otherwise.
     if (ScalarEpilogueStatus == CM_ScalarEpilogueAllowed ||
@@ -2902,10 +2915,20 @@ bool LoopVectorizationCostModel::isScalarWithPredication(
     if (VF.isVector())
       VTy = VectorType::get(Ty, VF);
     const Align Alignment = getLoadStoreAlignment(I);
+// RF debug
+/*
     return isa<LoadInst>(I) ? !(isLegalMaskedLoad(Ty, Ptr, Alignment, AS) ||
                                 TTI.isLegalMaskedGather(VTy, Alignment))
                             : !(isLegalMaskedStore(Ty, Ptr, Alignment, AS) ||
                                 TTI.isLegalMaskedScatter(VTy, Alignment));
+*/
+    bool Res =  isa<LoadInst>(I) ? !(isLegalMaskedLoad(Ty, Ptr, Alignment, AS) ||
+                                TTI.isLegalMaskedGather(VTy, Alignment))
+                            : !(isLegalMaskedStore(Ty, Ptr, Alignment, AS) ||
+                                TTI.isLegalMaskedScatter(VTy, Alignment));
+    dbgs() << "&&& Consider " << *I << " / " << Res << "\n";
+    // return Res;
+    return false;
   }
   case Instruction::UDiv:
   case Instruction::SDiv:
@@ -3600,6 +3623,8 @@ FixedScalableVFPair LoopVectorizationCostModel::computeFeasibleMaxVF(
 
 FixedScalableVFPair
 LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
+// RF debug
+dbgs() << "&&& MaxVF\n";
   if (Legal->getRuntimePointerChecking()->Need && TTI.hasBranchDivergence()) {
     // TODO: It may be useful to do since it's still likely to be dynamically
     // uniform if the target can skip.
@@ -3639,9 +3664,14 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
     return FixedScalableVFPair::getNone();
   }
 
+// RF debug
+dbgs() << "&&& Switch\n";
   switch (ScalarEpilogueStatus) {
-  case CM_ScalarEpilogueAllowed:
+  case CM_ScalarEpilogueAllowed: {
+// RF debug
+    dbgs() << "&&& Scalar Bail\n";
     return computeFeasibleMaxVF(MaxTC, UserVF, false);
+  }
   case CM_ScalarEpilogueNotAllowedUsePredicate:
     [[fallthrough]];
   case CM_ScalarEpilogueNotNeededUsePredicate:
@@ -3667,6 +3697,9 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
 
     break;
   }
+
+// RF debug
+dbgs() << "&&& Tail Fold\n";
 
   // Now try the tail folding
 
@@ -3769,9 +3802,10 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
       // Tail folded loop using VP intrinsics restricts the VF to be scalable
       // for now.
       // TODO: extend it for fixed vectors, if required.
-      assert(ContainsScalableVF && "Expected scalable vector factor.");
+// RF debug
+      // assert(ContainsScalableVF && "Expected scalable vector factor.");
 
-      MaxFactors.FixedVF = ElementCount::getFixed(1);
+      // MaxFactors.FixedVF = ElementCount::getFixed(1);
     }
     return MaxFactors;
   }
@@ -6758,6 +6792,8 @@ void LoopVectorizationPlanner::plan(ElementCount UserVF, unsigned UserIC) {
   buildVPlansWithVPRecipes(ElementCount::getFixed(1), MaxFactors.FixedVF);
   buildVPlansWithVPRecipes(ElementCount::getScalable(1), MaxFactors.ScalableVF);
 
+// RF debug
+dbgs() << "&&& From here\n";
   LLVM_DEBUG(printPlans(dbgs()));
 }
 
@@ -7680,6 +7716,7 @@ void EpilogueVectorizerEpilogueLoop::printDebugTracesAtEnd() {
   });
 }
 
+// RF debug here
 VPWidenMemoryRecipe *
 VPRecipeBuilder::tryToWidenMemory(Instruction *I, ArrayRef<VPValue *> Operands,
                                   VFRange &Range) {
@@ -7696,11 +7733,14 @@ VPRecipeBuilder::tryToWidenMemory(Instruction *I, ArrayRef<VPValue *> Operands,
     if (CM.isScalarAfterVectorization(I, VF) ||
         CM.isProfitableToScalarize(I, VF))
       return false;
+// RF debug
+dbgs() << "&&& WillWiden " << Decision << "\n";
     return Decision != LoopVectorizationCostModel::CM_Scalarize;
   };
 
-  if (!LoopVectorizationPlanner::getDecisionAndClampRange(WillWiden, Range))
+  if (!LoopVectorizationPlanner::getDecisionAndClampRange(WillWiden, Range)) {
     return nullptr;
+  }
 
   VPValue *Mask = nullptr;
   if (Legal->isMaskRequired(I))
@@ -8369,6 +8409,9 @@ VPRecipeBuilder::tryToCreatePartialReduction(Instruction *Reduction,
 
 void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
                                                         ElementCount MaxVF) {
+// RF debug
+dbgs() << "&&& Build VP\n";
+
   if (ElementCount::isKnownGT(MinVF, MaxVF))
     return;
 
@@ -8384,12 +8427,16 @@ void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
     LVer.prepareNoAliasMetadata();
   }
 
+// RF debug
+dbgs() << "&&& For\n";
   auto MaxVFTimes2 = MaxVF * 2;
   auto VPlan0 = VPlanTransforms::buildPlainCFG(OrigLoop, *LI);
   for (ElementCount VF = MinVF; ElementCount::isKnownLT(VF, MaxVFTimes2);) {
     VFRange SubRange = {VF, MaxVFTimes2};
     if (auto Plan = tryToBuildVPlanWithVPRecipes(
             std::unique_ptr<VPlan>(VPlan0->duplicate()), SubRange, &LVer)) {
+// RF debug
+dbgs() << "&&& Try VF " << VF << "\n";
       bool HasScalarVF = Plan->hasScalarVFOnly();
       // Now optimize the initial VPlan.
       if (!HasScalarVF)
@@ -8397,9 +8444,12 @@ void LoopVectorizationPlanner::buildVPlansWithVPRecipes(ElementCount MinVF,
                                  *Plan, CM.getMinimalBitwidths());
       VPlanTransforms::runPass(VPlanTransforms::optimize, *Plan);
       // TODO: try to put it close to addActiveLaneMask().
-      if (CM.foldTailWithEVL() && !HasScalarVF)
+      if (CM.foldTailWithEVL() && !HasScalarVF) {
+// RF debug
+dbgs() << "&&& EVL Build VP\n";
         VPlanTransforms::runPass(VPlanTransforms::addExplicitVectorLength,
                                  *Plan, CM.getMaxSafeElements());
+      }
       assert(verifyVPlanIsValid(*Plan) && "VPlan is invalid");
       VPlans.push_back(std::move(Plan));
     }
@@ -8613,8 +8663,11 @@ static void addExitUsersForFirstOrderRecurrences(VPlan &Plan, VFRange &Range) {
   }
 }
 
+// RF debug
 VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
     VPlanPtr Plan, VFRange &Range, LoopVersioning *LVer) {
+
+dbgs() << "&&& TryToBuild\n";
 
   using namespace llvm::VPlanPatternMatch;
   SmallPtrSet<const InterleaveGroup<Instruction> *, 1> InterleaveGroups;
@@ -8715,6 +8768,8 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
   ReversePostOrderTraversal<VPBlockShallowTraversalWrapper<VPBlockBase *>> RPOT(
       HeaderVPBB);
 
+// RF debug
+dbgs() << "&&& P1\n";
   auto *MiddleVPBB = Plan->getMiddleBlock();
   VPBasicBlock::iterator MBIP = MiddleVPBB->getFirstNonPhi();
   // Mapping from VPValues in the initial plan to their widened VPValues. Needed
@@ -8765,8 +8820,12 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
       VPRecipeBase *Recipe =
           RecipeBuilder.tryToCreateWidenRecipe(SingleDef, Range);
       if (!Recipe) {
+// RF debug
+dbgs() << "&&& Recipe fail\n";
         SmallVector<VPValue *, 4> Operands(R.operands());
         Recipe = RecipeBuilder.handleReplication(Instr, Operands, Range);
+      } else {
+dbgs() << "&&& Widen " << *Instr << "\n";
       }
 
       RecipeBuilder.setRecipe(Instr, Recipe);
@@ -8800,6 +8859,9 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
          !Plan->getVectorLoopRegion()->getEntryBasicBlock()->empty() &&
          "entry block must be set to a VPRegionBlock having a non-empty entry "
          "VPBasicBlock");
+
+// RF debug
+dbgs() << "&&& P2\n";
 
   // Update wide induction increments to use the same step as the corresponding
   // wide induction. This enables detecting induction increments directly in
@@ -8838,6 +8900,8 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
   // TODO: Enable following transform when the EVL-version of extended-reduction
   // and mulacc-reduction are implemented.
   if (!CM.foldTailWithEVL()) {
+// RF debug
+dbgs() << "&&& Abstract\n";
     VPCostContext CostCtx(CM.TTI, *CM.TLI, Legal->getWidestInductionType(), CM,
                           CM.CostKind);
     VPlanTransforms::runPass(VPlanTransforms::convertToAbstractRecipes, *Plan,
@@ -8854,6 +8918,9 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
   VPlanTransforms::runPass(VPlanTransforms::createInterleaveGroups, *Plan,
                            InterleaveGroups, RecipeBuilder,
                            CM.isScalarEpilogueAllowed());
+
+// RF debug
+dbgs() << "&&& P3\n";
 
   // Replace VPValues for known constant strides guaranteed by predicate scalar
   // evolution.
@@ -8904,6 +8971,8 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
     return nullptr;
 
   if (useActiveLaneMask(Style)) {
+// RF debug
+dbgs() << "&&& Lane Mask\n";
     // TODO: Move checks to VPlanTransforms::addActiveLaneMask once
     // TailFoldingStyle is visible there.
     bool ForControlFlow = useActiveLaneMaskForControlFlow(Style);

@@ -8042,15 +8042,21 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     return;
   }
   case Intrinsic::experimental_get_vector_length: {
+// RF debug
+dbgs() << "&&& DAG get vector!!!\n";
     assert(cast<ConstantInt>(I.getOperand(1))->getSExtValue() > 0 &&
            "Expected positive VF");
     unsigned VF = cast<ConstantInt>(I.getOperand(1))->getZExtValue();
-    bool IsScalable = cast<ConstantInt>(I.getOperand(2))->isOne();
+// RF debug
+    // bool IsScalable = cast<ConstantInt>(I.getOperand(2))->isOne();
+    bool IsScalable = false;
 
     SDValue Count = getValue(I.getOperand(0));
     EVT CountVT = Count.getValueType();
 
-    if (!TLI.shouldExpandGetVectorLength(CountVT, VF, IsScalable)) {
+// RF debug
+//     if (1 || !TLI.shouldExpandGetVectorLength(CountVT, VF, IsScalable)) {
+   if (!TLI.shouldExpandGetVectorLength(CountVT, VF, IsScalable)) {
       visitTargetIntrinsic(I, Intrinsic);
       return;
     }
