@@ -1036,19 +1036,27 @@ bool PPCTTIImpl::supportsTailCallFor(const CallBase *CB) const {
   return TLI->supportsTailCallFor(CB);
 }
 
+static inline bool isLegalLoadWithLengthType(EVT VT) {
+// RF debug
+  dbgs() << "&&& Legal " << VT << "\n";
+  if (VT != MVT::i64 && VT != MVT::i32 && VT != MVT::i16 &&
+      VT != MVT::i8)
+/*
+  if (VT != MVT::v2i64 && VT != MVT::v4i32 && VT != MVT::v8i16 &&
+      VT != MVT::v16i8)
+*/
+    return false;
+  return true;
+}
+
 // Target hook used by CodeGen to decide whether to expand vector predication
 // intrinsics into scalar operations or to use special ISD nodes to represent
 // them. The Target will not see the intrinsics.
 TargetTransformInfo::VPLegalization
 PPCTTIImpl::getVPLegalizationStrategy(const VPIntrinsic &PI) const {
   using VPLegalization = TargetTransformInfo::VPLegalization;
-  unsigned Directive = ST->getCPUDirective();
   VPLegalization DefaultLegalization = BaseT::getVPLegalizationStrategy(PI);
-  if (Directive != PPC::DIR_PWR10 && Directive != PPC::DIR_PWR_FUTURE &&
-      (!Pwr9EVL || Directive != PPC::DIR_PWR9))
-    return DefaultLegalization;
-
-  if (!ST->isPPC64())
+  if (!ST->isPPC64() || !hasActiveVectorLength())
     return DefaultLegalization;
 
   unsigned IID = PI.getIntrinsicID();
@@ -1073,4 +1081,30 @@ PPCTTIImpl::getVPLegalizationStrategy(const VPIntrinsic &PI) const {
     return DefaultLegalization;
 
   return VPLegalization(VPLegalization::Legal, VPLegalization::Legal);
+}
+
+bool PPCTTIImpl::hasActiveVectorLength() const {
+  unsigned CPU =  ST->getCPUDirective();
+  if (CPU == PPC::DIR_PWR10 || CPU == PPC::DIR_PWR_FUTURE ||
+      (Pwr9EVL && CPU == PPC::DIR_PWR9))
+    return true;
+  return false;
+}
+
+bool PPCTTIImpl::isLegalMaskedLoad(Type *DataType, Align Alignment,
+                                   unsigned AddressSpace) const {
+// RF debug
+dbgs() << "&&& Why " << *DataType << "\n";
+  if (!hasActiveVectorLength())
+    return false;
+//   if (!isa<FixedVectorType>(DataType))
+//     return false;
+  if (!isLegalLoadWithLengthType(TLI->getValueType(DL, DataType, true)))
+    return false;
+  return true;
+}
+
+bool PPCTTIImpl::isLegalMaskedStore(Type *DataType, Align Alignment,
+                                    unsigned AddressSpace) const {
+  return isLegalMaskedLoad(DataType, Alignment, AddressSpace);
 }

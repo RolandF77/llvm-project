@@ -1322,7 +1322,9 @@ public:
       return;
     // Override EVL styles if needed.
     // FIXME: Investigate opportunity for fixed vector factor.
-    bool EVLIsLegal = UserIC <= 1 && IsScalableVF &&
+// RF debug
+    // bool EVLIsLegal = UserIC <= 1 && IsScalableVF &&
+    bool EVLIsLegal = UserIC <= 1 && 
                       TTI.hasActiveVectorLength() && !EnableVPlanNativePath;
     if (EVLIsLegal)
       return;
@@ -2780,10 +2782,19 @@ bool LoopVectorizationCostModel::isScalarWithPredication(
     if (VF.isVector())
       VTy = VectorType::get(Ty, VF);
     const Align Alignment = getLoadStoreAlignment(I);
+/*
     return isa<LoadInst>(I) ? !(isLegalMaskedLoad(Ty, Ptr, Alignment, AS) ||
                                 TTI.isLegalMaskedGather(VTy, Alignment))
                             : !(isLegalMaskedStore(Ty, Ptr, Alignment, AS) ||
                                 TTI.isLegalMaskedScatter(VTy, Alignment));
+*/
+    bool Res =  isa<LoadInst>(I) ? !(isLegalMaskedLoad(Ty, Ptr, Alignment, AS) ||
+                                TTI.isLegalMaskedGather(VTy, Alignment))
+                            : !(isLegalMaskedStore(Ty, Ptr, Alignment, AS) ||
+                                TTI.isLegalMaskedScatter(VTy, Alignment));
+    dbgs() << "&&& Consider " << *I << " / " << *VTy << " / " << Res << "\n";
+    return Res;
+    // return false;
   }
   case Instruction::UDiv:
   case Instruction::SDiv:
@@ -3650,9 +3661,10 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
       // Tail folded loop using VP intrinsics restricts the VF to be scalable
       // for now.
       // TODO: extend it for fixed vectors, if required.
-      assert(ContainsScalableVF && "Expected scalable vector factor.");
+// RF debug
+      // assert(ContainsScalableVF && "Expected scalable vector factor.");
 
-      MaxFactors.FixedVF = ElementCount::getFixed(1);
+      // MaxFactors.FixedVF = ElementCount::getFixed(1);
     }
     return MaxFactors;
   }
