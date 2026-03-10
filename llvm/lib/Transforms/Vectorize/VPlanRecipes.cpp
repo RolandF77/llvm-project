@@ -642,12 +642,18 @@ Value *VPInstruction::generate(VPTransformState &State) {
     assert(AVL->getType()->isIntegerTy() &&
            "Requested vector length should be an integer.");
 
-    assert(State.VF.isScalable() && "Expected scalable vector factor.");
+// RF debug
+    // assert(State.VF.isScalable() && "Expected scalable vector factor.");
     Value *VFArg = Builder.getInt32(State.VF.getKnownMinValue());
 
+    // RF debug
+    Value *ScalFlag = State.VF.isScalable() ? State.Builder.getTrue() :
+                                              State.Builder.getFalse();
     Value *EVL = Builder.CreateIntrinsic(
         Builder.getInt32Ty(), Intrinsic::experimental_get_vector_length,
-        {AVL, VFArg, Builder.getTrue()});
+// RF debug
+        {AVL, VFArg, ScalFlag});
+        // {AVL, VFArg, Builder.getTrue()});
     return EVL;
   }
   case VPInstruction::CanonicalIVIncrementForPart: {

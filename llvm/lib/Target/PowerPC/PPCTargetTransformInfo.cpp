@@ -1136,9 +1136,11 @@ PPCTTIImpl::getMemIntrinsicInstrCost(const MemIntrinsicCostAttributes &MICA,
 
   unsigned Opcode;
   switch (MICA.getID()) {
+  case Intrinsic::vp_load:
   case Intrinsic::masked_load:
     Opcode = Instruction::Load;
     break;
+  case Intrinsic::vp_store:
   case Intrinsic::masked_store:
     Opcode = Instruction::Store;
     break;
@@ -1172,4 +1174,18 @@ PPCTTIImpl::getMemIntrinsicInstrCost(const MemIntrinsicCostAttributes &MICA,
       VecTy->getScalarSizeInBits() != 8)
     Cost += 1; // need shift for length
   return Cost;
+}
+
+// RF debug
+TailFoldingStyle
+PPCTTIImpl::getPreferredTailFoldingStyle(bool IVUpdateMayOverflow) const {
+  // return TailFoldingStyle::DataWithEVL;
+  // return IVUpdateMayOverflow ? TailFoldingStyle::None :
+  //                              TailFoldingStyle::DataWithEVL;
+  return hasActiveVectorLength() ? TailFoldingStyle::DataWithEVL :
+                                   TailFoldingStyle::None;
+}
+
+bool PPCTTIImpl::preferPredicateOverEpilogue(TailFoldingInfo *TFI) const {
+  return hasActiveVectorLength();
 }

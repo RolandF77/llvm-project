@@ -1321,6 +1321,8 @@ public:
   TailFoldingStyle getTailFoldingStyle(bool IVUpdateMayOverflow = true) const {
     if (!ChosenTailFoldingStyle)
       return TailFoldingStyle::None;
+// RF debug
+dbgs() << "&&& getTailFoldingStyle " << IVUpdateMayOverflow << "\n";
     return IVUpdateMayOverflow ? ChosenTailFoldingStyle->first
                                : ChosenTailFoldingStyle->second;
   }
@@ -1349,7 +1351,9 @@ public:
       return;
     // Override EVL styles if needed.
     // FIXME: Investigate opportunity for fixed vector factor.
-    bool EVLIsLegal = UserIC <= 1 && IsScalableVF &&
+// RF debug
+    // bool EVLIsLegal = UserIC <= 1 && IsScalableVF &&
+    bool EVLIsLegal = UserIC <= 1 && 
                       TTI.hasActiveVectorLength() && !EnableVPlanNativePath;
     if (EVLIsLegal)
       return;
@@ -1372,6 +1376,8 @@ public:
 
   /// Returns true if all loop blocks should be masked to fold tail loop.
   bool foldTailByMasking() const {
+// RF debug
+dbgs() << "&&& From FTBM\n";
     // TODO: check if it is possible to check for None style independent of
     // IVUpdateMayOverflow flag in getTailFoldingStyle.
     return getTailFoldingStyle() != TailFoldingStyle::None;
@@ -3725,6 +3731,8 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
   // FIXME: look for a smaller MaxVF that does divide TC rather than masking.
   bool ContainsScalableVF = MaxFactors.ScalableVF.isNonZero();
   setTailFoldingStyles(ContainsScalableVF, UserIC);
+// RF debug
+dbgs() << "&&& Howdy!\n";
   if (foldTailByMasking()) {
     if (foldTailWithEVL()) {
       LLVM_DEBUG(
@@ -3735,9 +3743,10 @@ LoopVectorizationCostModel::computeMaxVF(ElementCount UserVF, unsigned UserIC) {
       // Tail folded loop using VP intrinsics restricts the VF to be scalable
       // for now.
       // TODO: extend it for fixed vectors, if required.
-      assert(ContainsScalableVF && "Expected scalable vector factor.");
+// RF debug
+      // assert(ContainsScalableVF && "Expected scalable vector factor.");
 
-      MaxFactors.FixedVF = ElementCount::getFixed(1);
+      // MaxFactors.FixedVF = ElementCount::getFixed(1);
     }
     return MaxFactors;
   }
@@ -7286,6 +7295,8 @@ VectorizationFactor LoopVectorizationPlanner::computeBestVF() {
     }
   }
 
+// RF debug
+// #ifdef BOOM
 #ifndef NDEBUG
   // Select the optimal vectorization factor according to the legacy cost-model.
   // This is now only used to verify the decisions by the new VPlan-based
@@ -8184,6 +8195,9 @@ VPlanPtr LoopVectorizationPlanner::tryToBuildVPlanWithVPRecipes(
   bool IVUpdateMayOverflow = false;
   for (ElementCount VF : Range)
     IVUpdateMayOverflow |= !isIndvarOverflowCheckKnownFalse(&CM, VF);
+
+  // RF debug
+  dbgs() << "&&& IVUpdateMayOverflow " << IVUpdateMayOverflow << "\n";
 
   TailFoldingStyle Style = CM.getTailFoldingStyle(IVUpdateMayOverflow);
   // Use NUW for the induction increment if we proved that it won't overflow in

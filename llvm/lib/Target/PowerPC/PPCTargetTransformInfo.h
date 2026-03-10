@@ -169,6 +169,12 @@ public:
   getMemIntrinsicInstrCost(const MemIntrinsicCostAttributes &MICA,
                            TTI::TargetCostKind CostKind) const override;
 
+  // RF debug
+  TailFoldingStyle
+  getPreferredTailFoldingStyle(bool IVUpdateMayOverflow = true) const override;
+
+  bool preferPredicateOverEpilogue(TailFoldingInfo *TFI) const override;
+
 private:
   // The following constant is used for estimating costs on power9.
   static const InstructionCost::CostType P9PipelineFlushEstimate = 80;
