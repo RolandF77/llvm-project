@@ -1192,7 +1192,10 @@ InstructionCost PPCTTIImpl::getPartialReductionCost(
     if (AVT != MVT::v16i8 || OpBExtend != TTI::PR_ZeroExtend)
       return Invalid;
   } else if (AVT == MVT::v16i8 && OpAExtend == TTI::PR_SignExtend) {
-    return Invalid;
+    // RF debug
+    // return Invalid;
+    // TODO: cost adjustment
+    return 5;
   }
 
   return vectorCostAdjustmentFactor(Instruction::Add, ATy, nullptr);
